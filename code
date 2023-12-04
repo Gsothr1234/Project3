@@ -1,0 +1,314 @@
+SYRIATEL CUSTOMER CHURN
+
+PHASE 3 PROJECT
+
+STUDENT NAME: SADI KIRI
+
+BUSINESS UNDERSTANDING
+
+Overview
+
+In the telecommunication industry customer churn is typically used to refer to the rate at which a company is bleeding customers as they discontinue the services they employ with their particular service provider. This is an undesirable result as it results in revenue loss and can indicate the performance of the service provider brand image in the public eye. Furthermore this requires further investment of resources on the service provider part as revenue is diverted to acquire new customers as it is typically more expensive to attract new customers than to retain existing ones. Given this SyriaTel a telcomunications company facing a significant amount of churn wishes to be able to predict factors that cause customers to be more likely to churn in order to solidify its market share.
+Problem Statement
+
+Given the substantial dangers churn poses SyriaTel has provided data to aid in identifying key features that influence churn.  The goal is to develop a model with over 90% accuracy identify the key features that can be improved to reduce churn.
+
+Data Understanding
+The dataset was obtained for kaggle and contains a variety of featuresunoque to each customer in order to develop a model that with over 90% accuracy can predict the likelihood of a customer to churn. The first step therefore is to a deep dive into the dataset to understand our data set and data cleaning to ensure any predictive model will run without issues.
+
+
+
+
+
+Data EDA
+
+#Importing the relevant libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.preprocessing import StandardScaler
+
+#Loading the relevant dataset
+
+path = r"C:\Users\Owner\Documents\Flatiron\dsc-data-science-env-config\dsc-code-challenge-3-master-20231128T080505Z-001 - Copy\Project 3\syriatel.csv"
+
+df = pd.read_csv(path)
+df
+
+
+As evidenced the dataset contains 3333 rows and 21 columns with each row representing the distinct characterisitcs of a particular customer
+
+
+We further explore the data by checking the data by checking for null values and evauating the datatypes of each of the columns
+
+df.info()
+
+As we can see we have no null values. Additionally with few columns being nun numerical namely 'state', phone number' 'international plan', 'voice mail plan' and the target variable churn.
+
+#checking for  duplicates
+df.duplicated().sum()
+
+#A statistical summary of the data
+df.describe()
+
+Based on this the average length a customer holds an account is 101 with a standard deviation of about 39.8 other columns that seem to have substantial variance are the total day minutes,total eve minutes and total night minutes columns. Futhermore there is no evidence indicating a significant presence of outliers.
+
+For starters we can drop the phone number,area and state column is it will not bear any relevance for further analysis
+
+df.drop(['state','area code','phone number'], axis=1,inplace=True)
+
+#replace international plan,voicemail plan into binary
+df['international plan'].replace(('yes','no'),(1,0),inplace=True)
+df['voice mail plan'].replace(('yes','no'),(1,0),inplace=True)
+
+#Visual summary of churn cases
+churn_counts = df['churn'].value_counts()
+churn_counts.plot(kind='bar')
+plt.xlabel('Churn Status')
+plt.ylabel('No of Customers')
+plt.title('Churn vs Retained Customers')
+plt.show()
+
+
+churn_rate = ((sum(df['churn'] == True)/len(df['churn'])*100))
+print('Churn rate percentage is', (churn_rate), '%')
+
+Given the churn rate of approximately 14.5% demonstrates that there is a class imbalance that will need to be addresed before modelling.
+
+#Only numeric columns
+numeric_cols=df.select_dtypes(include=['int64','float64']).columns
+num_df = df[numeric_cols]
+#Plot visualizations for numeric columns
+fig, axes = plt.subplots(nrows=len(numeric_cols),ncols=2,figsize=(12,5*len(numeric_cols)))
+plt.subplots_adjust(hspace=0.5)
+
+for i,col in enumerate(numeric_cols):
+    sns.histplot(data=num_df,x=col,kde=True, ax=axes[i][0])
+    axes[i][0].set_title(f'Histogram of {col}')
+    sns.boxplot(data=num_df,x=col,ax=axes[i][1])
+    axes[i][1].set_title(f'Boxplot of {col}')
+plt.show()
+
+Most of the data appears to have a normal distribution making it a good fit for modelling.
+
+
+
+#Creating the correlation matrix
+corr_matrix = num_df.corr()
+corr_matrix
+
+
+#Plot using a heatmap
+plt.figure(figsize=(12,10))
+sns.heatmap(corr_matrix,annot=True, cmap='coolwarm')
+plt.title("Correlation Heatmap")
+plt.show()
+
+There is a strong positive corelation between the columns for total minutes and charges for the given times of day, evening and night which is intuitive as customers will take the charge into account when making a call.
+
+Modelling
+
+#Review the dataset
+df
+
+#Create Variables
+X = df.drop('churn',axis=1)
+y = df['churn']
+#Create split
+X_train, X_test, y_train, y_test = train_test_split(X,y,random_state= 42)
+
+#Scaling the features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+
+The next step is to deal woth the data imbalance in the churn as observed previously
+
+#importing relevant library
+from imblearn.over_sampling import SMOTE
+#Dealing with class imbalance in Churn
+smote = SMOTE(random_state=42)
+X_train_new, y_train_new = smote.fit_resample(X_train_scaled, y_train)
+
+
+logreg = LogisticRegression(random_state=42)
+
+#Train model
+logreg.fit(X_train_new,y_train_new)
+
+#Predictions
+y_pred = logreg.predict(X_test_scaled)
+
+
+
+# Model Evaluation
+classification_rep = classification_report(y_test,y_pred)
+print(classification_rep)
+
+The model is performing relatively well with an overall accuracy of 77% it is effective in identifying non churn cases with an f1 score of 85 but significantly lower when predicting the churn cases with an fl score of 51%
+
+#plot confusion matrix
+conf = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(8,6))
+sns.heatmap(conf, annot=True, fmt='d', cmap ='Blues', cbar=False)
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.show()
+
+Attempting to cross validate model using K fold cross validation
+
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import cross_val_score
+strat = StratifiedKFold(n_splits=5, shuffle=True,random_state=42)
+cv_results = cross_val_score(logreg, X_train_new, y_train_new, cv=strat,scoring='accuracy')
+print(cv_results)
+
+
+The model performance seems to be performing consistently across the various splits of data
+
+
+Next we will attempt to fit the data to the decision tree model
+
+from sklearn.tree import DecisionTreeClassifier
+dt = DecisionTreeClassifier(random_state=42)
+dt.fit(X_train_new,y_train_new)
+
+
+#Prediction and evaluation
+y_pred_1 = dt.predict(X_test_scaled)
+classification = classification_report(y_test,y_pred)
+print(classification)
+
+The model shows an improved accuracy over the logistic regression with an accuracy of 87% and a slight improvement in precision when predicting accurate cases of churn at 60%
+
+#plot confusion matrix
+conf = confusion_matrix(y_test, y_pred_1)
+plt.figure(figsize=(8,6))
+sns.heatmap(conf, annot=True, fmt='d', cmap ='Blues', cbar=False)
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.show()
+
+Next we will use the random forest model to analyze the data as not all relationships between target variable may be linear and provides increased flexibility as compared to logistic regression
+
+from sklearn.ensemble import RandomForestClassifier
+rf = RandomForestClassifier(random_state=42)
+#Train
+rf.fit(X_train_new,y_train_new)
+#Predictions on the test set
+y_pred_rf = rf.predict(X_test_scaled)
+
+# Evaluate the model
+classification_rf = classification_report(y_test, y_pred_rf)
+print(classification_rf)
+
+This represents the best model so far with a high f1 score for both churn and non churn and an overall accuracy of 95%
+
+We will now use hyper parameter tuning on our best permorming model to see if we can improve it further
+
+#import
+from sklearn.model_selection import GridSearchCV
+
+#Parametergrid for search
+param_grid = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [None, 10, 20],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+}
+#Instantiate Randomforestcassifier
+rf1 = RandomForestClassifier(random_state=42)
+# GridSearchCV object
+grid_search = GridSearchCV(estimator=rf1, param_grid=param_grid, scoring='f1', cv=5, n_jobs=-1)
+#Fit model
+grid_search.fit(X_train_new, y_train_new)
+best_rf = grid_search.best_estimator_
+#Predictions 
+y_pred_rfbest = best_rf.predict(X_test_scaled)
+# Evaluate the model
+classification_rfbest = classification_report(y_test, y_pred_rfbest)
+print(classification_rfbest)
+
+The hyperparameter tuned RandomForest model has an f1 score of 97% with an improved f1 score of 82% for churn cases.
+
+
+
+# Create confusion matrix
+conf1 = confusion_matrix(y_test, y_pred_rfbest)
+
+# Plot confusion matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(conf1, annot=True, fmt='d', cmap='Blues', xticklabels=['Not Churn', 'Churn'], yticklabels=['Not Churn', 'Churn'])
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.show()
+
+
+# Get feature importances from the best model
+feature_importances = best_rf.feature_importances_
+feature_names = X_train.columns
+indices = feature_importances.argsort()[::-1]
+
+# Plot feature importances
+plt.figure(figsize=(12, 6))
+plt.bar(range(X_train.shape[1]), feature_importances[indices])
+plt.xticks(range(X_train.shape[1]), feature_names[indices], rotation=90)
+plt.title('Feature Importances - Random Forest')
+plt.show()
+
+features of note are total day minutes,customer service calls  total day minutes and international plan being the most significant while number vmail messages,account length and total eve calls are the least
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Create subplots for each feature
+fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
+
+# Plot Total Day Minutes vs Churn
+sns.boxplot(x='churn', y='total day minutes', data=df, ax=axes[0])
+axes[0].set_title('Total Day Minutes vs Churn')
+
+# Plot Customer Service Calls vs Churn
+sns.boxplot(x='churn', y='customer service calls', data=df, ax=axes[1])
+axes[1].set_title('Customer Service Calls vs Churn')
+
+# Plot International Plan vs Churn
+sns.countplot(x='international plan', hue='churn', data=df, ax=axes[2])
+axes[2].set_title('International Plan vs Churn')
+
+plt.tight_layout()
+plt.show()
+
+
+Conclusion
+
+The random forest model was the best performing model, showing an accuracy of 95% with an fl score of 97% for non churn cases and 82% for churn cases indicating a robust model
+
+Frequent customer calls indicate a significant higher chance to churn
+Users who are on the international plan are also more likely to churn
+users who use more total day minute are more likely to churn an indicator of either high charges are connectivity issues during high volume periods
+
+Recommendations
+
+Customer service appears to be a key issue further investigation and analysis into whta common problems custoomers experience mcan help for a targeted fix that will allleviate the issue.
+
+Investigate pricing structure as daily minutes has seen to be a significant factor in churn could indicate high prices as opposed to competitor market survey against competitors is recommended
+
+Review international plan cost could be a key driver in this challenge may need to restructure plan to entice customers to stay
+
+Next Steps
+
+A breakdown into customer service calls to target key issues using key word searches
+
+Investigate connectivity issues by area
+
+Investigate if technology can handle high volumes during the day time as that could also cause the drop offs
